@@ -1,73 +1,43 @@
-#pragma comment(linker, "/entry:WinMainCRTStartup /subsystem:console")
+Ôªø#pragma comment(linker, "/entry:WinMainCRTStartup /subsystem:console")
 
 #include <windows.h>
-#include <stdio.h>
+#include <math.h>
 
-struct GameContext
-{
-    int playerPos;
-    bool isRunning;
-};
+// ÏúÑÏπò
+float g_x = 400.0f;
+float g_y = 300.0f;
+float g_speed = 200.0f;
 
-// ¿‘∑¬ √≥∏Æ (Enter « ø‰ æ¯¿Ω)
-void ProcessInput(GameContext* ctx)
-{
-    if (GetAsyncKeyState('A') & 0x8000)
-    {
-        ctx->playerPos--;
-        Sleep(120);
-    }
+// ÏûÖÎ†• ÏÉÅÌÉú
+bool g_keyLeft = false;
+bool g_keyRight = false;
+bool g_keyUp = false;
+bool g_keyDown = false;
 
-    if (GetAsyncKeyState('D') & 0x8000)
-    {
-        ctx->playerPos++;
-        Sleep(120);
-    }
-
-    if (GetAsyncKeyState('Q') & 0x8000)
-    {
-        ctx->isRunning = false;
-    }
-}
-
-// ∞‘¿” ªÛ≈¬ æ˜µ•¿Ã∆Æ
-void Update(GameContext* ctx)
-{
-    if (ctx->playerPos < 0)
-        ctx->playerPos = 0;
-
-    if (ctx->playerPos > 10)
-        ctx->playerPos = 10;
-}
-
-// »≠∏È √‚∑¬
-void Render(GameContext* ctx)
-{
-    system("cls");   // »≠∏È √ ±‚»≠
-
-    printf("========= GAME SCREEN =========\n");
-    printf("Press A / D to Move | Q to Quit\n\n");
-
-    printf("Player Position : %d\n", ctx->playerPos);
-    printf("[");
-
-    for (int i = 0; i <= 10; i++)
-    {
-        if (i == ctx->playerPos)
-            printf("P");
-        else
-            printf("_");
-    }
-
-    printf("]\n");
-    printf("================================\n");
-}
-
-// ¿©µµøÏ ∏ﬁΩ√¡ˆ √≥∏Æ
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
+    case WM_KEYDOWN:
+        switch (wParam)
+        {
+        case VK_LEFT:  g_keyLeft = true; break;
+        case VK_RIGHT: g_keyRight = true; break;
+        case VK_UP:    g_keyUp = true; break;
+        case VK_DOWN:  g_keyDown = true; break;
+        }
+        break;
+
+    case WM_KEYUP:
+        switch (wParam)
+        {
+        case VK_LEFT:  g_keyLeft = false; break;
+        case VK_RIGHT: g_keyRight = false; break;
+        case VK_UP:    g_keyUp = false; break;
+        case VK_DOWN:  g_keyDown = false; break;
+        }
+        break;
+
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
@@ -75,61 +45,119 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
     }
-
     return 0;
 }
 
-// «¡∑Œ±◊∑• Ω√¿€
-int APIENTRY WinMain(HINSTANCE hInstance,
-    HINSTANCE hPrevInstance,
-    LPSTR lpCmdLine,
-    int nCmdShow)
+// 6ÎßùÏÑ±
+void DrawStar(HDC hdc, float cx, float cy)
+{
+    POINT tri1[3];
+    POINT tri2[3];
+
+    float size = 50.0f;
+
+    for (int i = 0; i < 3; i++)
+    {
+        float angle = (90 + i * 120) * 3.14159f / 180.0f;
+        tri1[i].x = (LONG)(cx + cosf(angle) * size);
+        tri1[i].y = (LONG)(cy - sinf(angle) * size);
+    }
+
+    for (int i = 0; i < 3; i++)
+    {
+        float angle = (270 + i * 120) * 3.14159f / 180.0f;
+        tri2[i].x = (LONG)(cx + cosf(angle) * size);
+        tri2[i].y = (LONG)(cy - sinf(angle) * size);
+    }
+
+    Polygon(hdc, tri1, 3);
+    Polygon(hdc, tri2, 3);
+}
+
+int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 {
     WNDCLASSEXW wcex = {};
     wcex.cbSize = sizeof(WNDCLASSEX);
+    wcex.style = CS_HREDRAW | CS_VREDRAW;
     wcex.lpfnWndProc = WndProc;
     wcex.hInstance = hInstance;
-    wcex.lpszClassName = L"DXWindow";
+    wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+    wcex.lpszClassName = L"GameWindow";
 
     RegisterClassExW(&wcex);
 
     HWND hWnd = CreateWindowW(
-        L"DXWindow",
-        L"DirectX Learning Window",
+        L"GameWindow",
+        L"GameLoop Star",
         WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        800,
-        600,
-        nullptr,
-        nullptr,
-        hInstance,
-        nullptr
+        CW_USEDEFAULT, CW_USEDEFAULT,
+        800, 600,
+        nullptr, nullptr, hInstance, nullptr
     );
 
     ShowWindow(hWnd, nCmdShow);
+    UpdateWindow(hWnd);
 
-    GameContext game;
-    game.playerPos = 5;
-    game.isRunning = true;
+    // üî• ÏûÖÎ†• Ìè¨Ïª§Ïä§ Í∞ïÏ†ú
+    SetFocus(hWnd);
 
     MSG msg = {};
 
-    // ∞‘¿” ∑Á«¡
-    while (game.isRunning)
+    LARGE_INTEGER freq, prev, curr;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&prev);
+
+    // üéÆ Game Loop
+    while (true)
     {
-        // ¿©µµøÏ ∏ﬁΩ√¡ˆ √≥∏Æ
-        while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+        if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
         {
+            if (msg.message == WM_QUIT)
+                break;
+
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
+        else
+        {
+            // ÏãúÍ∞Ñ
+            QueryPerformanceCounter(&curr);
+            float dt = (float)(curr.QuadPart - prev.QuadPart) / freq.QuadPart;
+            prev = curr;
 
-        ProcessInput(&game);
-        Update(&game);
-        Render(&game);
+            // Ïù¥Îèô
+            if (g_keyLeft)  g_x -= g_speed * dt;
+            if (g_keyRight) g_x += g_speed * dt;
+            if (g_keyUp)    g_y -= g_speed * dt;
+            if (g_keyDown)  g_y += g_speed * dt;
 
-        Sleep(16); // æ‡ 60FPS
+            // üé® ÎçîÎ∏î Î≤ÑÌçºÎßÅ Î†åÎçîÎßÅ
+            HDC hdc = GetDC(hWnd);
+            HDC memDC = CreateCompatibleDC(hdc);
+
+            RECT rc;
+            GetClientRect(hWnd, &rc);
+
+            HBITMAP bitmap = CreateCompatibleBitmap(hdc, rc.right, rc.bottom);
+            HBITMAP oldBitmap = (HBITMAP)SelectObject(memDC, bitmap);
+
+            // Î∞∞Í≤Ω
+            FillRect(memDC, &rc, (HBRUSH)(COLOR_WINDOW + 1));
+
+            // Î≥Ñ Í∑∏Î¶¨Í∏∞
+            DrawStar(memDC, g_x, g_y);
+
+            // Î≥µÏÇ¨
+            BitBlt(hdc, 0, 0, rc.right, rc.bottom, memDC, 0, 0, SRCCOPY);
+
+            // Ï†ïÎ¶¨
+            SelectObject(memDC, oldBitmap);
+            DeleteObject(bitmap);
+            DeleteDC(memDC);
+            ReleaseDC(hWnd, hdc);
+        }
     }
 
-    return 0;
+    return (int)msg.wParam;
+}
