@@ -19,16 +19,18 @@ ID3D11VertexShader* g_pVertexShader = nullptr;
 ID3D11PixelShader* g_pPixelShader = nullptr;
 ID3D11InputLayout* g_pVertexLayout = nullptr;
 ID3D11Buffer* g_pVertexBuffer = nullptr;
-ID3D11Buffer* g_pConstantBuffer = nullptr; // 위치 전달용 상수 버퍼
 
-// 상수 버퍼 구조체 (16바이트 정렬)
+// [추가] GPU로 위치를 전달할 상수 버퍼 객체
+ID3D11Buffer* g_pConstantBuffer = nullptr;
+
+// [추가] C++와 셰이더가 통신할 데이터 구조체 (16바이트 정렬 필수)
 struct TransformBuffer {
     float offsetX;
     float offsetY;
-    float padding[2];
+    float padding[2]; // 16바이트 규격을 맞추기 위한 빈 공간
 };
 
-// 셰이더 코드 (cbuffer 추가됨)
+// [수정] 셰이더 코드: cbuffer를 추가하고, 정점 위치에 offset을 더해줍니다.
 const char* g_szShaderCode = R"(
 cbuffer TransformBuffer : register(b0) {
     float2 offset;
@@ -39,6 +41,7 @@ struct VS_OUTPUT { float4 Pos : SV_POSITION; float4 Col : COLOR; };
 
 VS_OUTPUT VS(float3 pos : POSITION, float4 col : COLOR) {
     VS_OUTPUT output;
+    // 기존 정점 위치에 C++에서 넘겨준 offset(이동값)을 더해줍니다.
     output.Pos = float4(pos.x + offset.x, pos.y + offset.y, pos.z, 1.0f);
     output.Col = col;
     return output;
@@ -70,7 +73,6 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
     HWND hWnd = CreateWindowW(L"HexagramEngine", L"DX11 DeltaTime Hexagram", WS_OVERLAPPEDWINDOW,
         100, 100, rc.right - rc.left, rc.bottom - rc.top, nullptr, nullptr, hInst, nullptr);
 
-    // DX11 초기화
     DXGI_SWAP_CHAIN_DESC sd = {};
     sd.BufferCount = 1;
     sd.BufferDesc.Width = width;
@@ -89,7 +91,6 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
     g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_pRenderTargetView);
     pBackBuffer->Release();
 
-    // 셰이더 컴파일
     ID3DBlob* vsBlob = nullptr;
     ID3DBlob* psBlob = nullptr;
     D3DCompile(g_szShaderCode, strlen(g_szShaderCode), nullptr, nullptr, nullptr, "VS", "vs_4_0", 0, 0, &vsBlob, nullptr);
@@ -105,7 +106,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
     g_pd3dDevice->CreateInputLayout(layout, 2, vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), &g_pVertexLayout);
     vsBlob->Release(); psBlob->Release();
 
-    // 상수 버퍼 생성 (DYNAMIC)
+    // [추가] 상수 버퍼 생성 (CPU에서 GPU로 데이터를 자주 보낼 것이므로 DYNAMIC 사용)
     D3D11_BUFFER_DESC cbd = {};
     cbd.Usage = D3D11_USAGE_DYNAMIC;
     cbd.ByteWidth = sizeof(TransformBuffer);
@@ -113,7 +114,6 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
     cbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     g_pd3dDevice->CreateBuffer(&cbd, nullptr, &g_pConstantBuffer);
 
-    // 육망성 정점 데이터
     Vertex vertices[] = {
         {  0.0f,  0.6f, 0.0f,  0, 0, 1, 1 }, {  0.5f, -0.3f, 0.0f,  0, 0, 1, 1 }, { -0.5f, -0.3f, 0.0f,  0, 0, 1, 1 },
         {  0.0f, -0.6f, 0.0f,  1, 0, 0, 1 }, { -0.5f,  0.3f, 0.0f,  1, 0, 0, 1 }, {  0.5f,  0.3f, 0.0f,  1, 0, 0, 1 }
@@ -125,19 +125,13 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
 
     ShowWindow(hWnd, nCmdShow);
     MSG msg = { 0 };
-
-    // --- [게임 루프 및 타이머 설정] ---
     auto prevTime = std::chrono::high_resolution_clock::now();
     float consoleUpdateTimer = 0.0f;
 
-    // 45프레임 고정 설정
-    const float targetFPS = 45.0f;
-    const float targetFrameTime = 1.0f / targetFPS;
-
-    // 오브젝트 상태 변수
+    // [추가] Game Context 변수 (육망성의 현재 위치와 속도)
     float playerX = 0.0f;
     float playerY = 0.0f;
-    float moveSpeed = 1.5f;
+    float moveSpeed = 1.5f; // 1초에 이동할 거리
 
     while (msg.message != WM_QUIT) {
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -145,42 +139,33 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
             DispatchMessage(&msg);
         }
         else {
-            // 1. DeltaTime 계산 및 프레임 고정
+            // --- A. DeltaTime 계산 ---
             auto currentTime = std::chrono::high_resolution_clock::now();
             std::chrono::duration<float> elapsed = currentTime - prevTime;
             float dt = elapsed.count();
+            prevTime = currentTime;
 
-            // 목표 프레임 시간보다 적게 지났다면 대기 (프레임 고정 핵심 로직)
-            if (dt < targetFrameTime) {
-                std::this_thread::yield();
-                continue;
-            }
+            // --- B. 업데이트 로직 (Process Input & Update) ---
+            // GetAsyncKeyState는 키가 눌려있으면 최상위 비트(0x8000)를 세팅함
+            // 실시간 게임에서는 scanf 대신 이 방식을 사용합니다.
+            if (GetAsyncKeyState('W') & 0x8000) playerY += moveSpeed * dt; // 위로
+            if (GetAsyncKeyState('S') & 0x8000) playerY -= moveSpeed * dt; // 아래로
+            if (GetAsyncKeyState('A') & 0x8000) playerX -= moveSpeed * dt; // 왼쪽으로
+            if (GetAsyncKeyState('D') & 0x8000) playerX += moveSpeed * dt; // 오른쪽으로
 
-            // DeltaTime 폭주 방지 (창 이동 등 렉 걸렸을 때 방어)
-            if (dt > 0.1f) dt = 0.1f;
-
-            prevTime = currentTime; // 업데이트 확정 시점에서 시간 갱신
-
-            // 2. 입력 및 업데이트
-            if (GetAsyncKeyState('W') & 0x8000) playerY += moveSpeed * dt;
-            if (GetAsyncKeyState('S') & 0x8000) playerY -= moveSpeed * dt;
-            if (GetAsyncKeyState('A') & 0x8000) playerX -= moveSpeed * dt;
-            if (GetAsyncKeyState('D') & 0x8000) playerX += moveSpeed * dt;
-
-            // 콘솔 출력 갱신 (0.1초 주기)
+            // 콘솔 출력 갱신
             consoleUpdateTimer += dt;
             if (consoleUpdateTimer >= 0.1f) {
                 system("cls");
                 printf("=== Engine Status ===\n");
-                printf("FPS      : %.2f (Target: 45)\n", 1.0f / dt);
+                printf("FPS      : %.2f\n", 1.0f / dt);
                 printf("DeltaTime: %.4f s\n", dt);
                 printf("Position : X(%.2f), Y(%.2f)\n", playerX, playerY);
-                printf("Window   : 600 x 600 (Client)\n");
                 printf("=====================\n");
                 consoleUpdateTimer = 0.0f;
             }
 
-            // 3. 렌더링
+            // --- C. 렌더링 (Render Frame) ---
             float clearColor[] = { 0.1f, 0.1f, 0.1f, 1.0f };
             g_pImmediateContext->ClearRenderTargetView(g_pRenderTargetView, clearColor);
 
@@ -188,7 +173,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
             g_pImmediateContext->RSSetViewports(1, &vp);
             g_pImmediateContext->OMSetRenderTargets(1, &g_pRenderTargetView, nullptr);
 
-            // CPU의 위치 데이터를 GPU 상수 버퍼로 복사
+            // [추가] 업데이트된 위치 데이터를 GPU(상수 버퍼)로 복사
             D3D11_MAPPED_SUBRESOURCE mappedResource;
             g_pImmediateContext->Map(g_pConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
             TransformBuffer* pData = (TransformBuffer*)mappedResource.pData;
@@ -196,6 +181,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
             pData->offsetY = playerY;
             g_pImmediateContext->Unmap(g_pConstantBuffer, 0);
 
+            // [추가] 렌더링 파이프라인에 상수 버퍼 연결
             g_pImmediateContext->VSSetConstantBuffers(0, 1, &g_pConstantBuffer);
 
             UINT stride = sizeof(Vertex), offset = 0;
@@ -208,11 +194,13 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
 
             g_pImmediateContext->Draw(6, 0);
             g_pSwapChain->Present(0, 0);
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
     }
 
     // 자원 해제
-    if (g_pConstantBuffer) g_pConstantBuffer->Release();
+    if (g_pConstantBuffer) g_pConstantBuffer->Release(); // [추가] 해제
     if (g_pVertexBuffer) g_pVertexBuffer->Release();
     if (g_pVertexLayout) g_pVertexLayout->Release();
     if (g_pVertexShader) g_pVertexShader->Release();
