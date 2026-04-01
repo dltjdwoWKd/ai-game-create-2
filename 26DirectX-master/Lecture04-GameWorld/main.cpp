@@ -10,25 +10,10 @@
          (루프 한 번 돌 때 [입력 -> 업데이트 -> 렌더링] 순서로 모든 객체를 훑음.)
  [작동 원리]
  - Start: 물체가 태어날 때 딱 한 번 실행되는 초기화 코드
- - Update: 게임이 켜져 있는 동안 무한히 반복 실행되는 실행 코드
  - OnInput(): 키보드/마우스 상태를 확인.
  - OnUpdate(): 수치(좌표 등)를 계산.
  - OnRender(): 화면에 결과를 출력.
 
-================================================================================
-*/
-
-/*
-================================================================================
- [전체 소스: Lifecycle 기반 미니 컴포넌트 엔진]
-================================================================================
- 1. 구조: Component -> GameObject -> GameWorld 순으로 확장됨.
- 2. 단계: 루프 한 번 돌 때 [입력 -> 업데이트 -> 렌더링] 순서로 모든 객체를 훑음.
- 3. 특징:
-    - Start(): 생애 첫 프레임에만 딱 한 번 실행.
-    - OnInput(): 키보드/마우스 상태를 확인.
-    - OnUpdate(): 수치(좌표 등)를 계산.
-    - OnRender(): 화면에 결과를 출력.
 ================================================================================
 */
 
@@ -159,17 +144,18 @@ int main() {
     // [초기화] 게임 월드와 객체 생성
     std::vector<GameObject*> gameWorld;
 
-    // 플레이어 객체 조립
-    GameObject* player = new GameObject("Player1");
-    PlayerControl* pControl = new PlayerControl();
-    player->AddComponent(pControl);
-    gameWorld.push_back(player);
-
     // 시스템 정보 객체 조립
     GameObject* sysInfo = new GameObject("SystemManager");
     InfoDisplay* pInfo = new InfoDisplay();
     sysInfo->AddComponent(pInfo);
     gameWorld.push_back(sysInfo);
+
+
+    // 플레이어 객체 조립
+    GameObject* player = new GameObject("Player1");
+    PlayerControl* pControl = new PlayerControl();
+    player->AddComponent(pControl);
+    gameWorld.push_back(player);
 
     // 시간 측정 준비
     std::chrono::high_resolution_clock::time_point prevTime = std::chrono::high_resolution_clock::now();
