@@ -31,6 +31,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Lecture04-DX_ShaderCompile"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Lecture02-win32_KeyEvent_Polling", "Lecture02-win32_KeyEvent_Polling\Lecture02-win32_KeyEvent_Polling.vcxproj", "{2C947138-F0BD-4207-BD89-CB57B22DEC82}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "world", "world\world.vcxproj", "{F9DCD1D7-72DF-4BF7-A4E6-6574B0149FB6}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -151,6 +153,14 @@ Global
 		{2C947138-F0BD-4207-BD89-CB57B22DEC82}.Release|x64.Build.0 = Release|x64
 		{2C947138-F0BD-4207-BD89-CB57B22DEC82}.Release|x86.ActiveCfg = Release|Win32
 		{2C947138-F0BD-4207-BD89-CB57B22DEC82}.Release|x86.Build.0 = Release|Win32
+		{F9DCD1D7-72DF-4BF7-A4E6-6574B0149FB6}.Debug|x64.ActiveCfg = Debug|x64
+		{F9DCD1D7-72DF-4BF7-A4E6-6574B0149FB6}.Debug|x64.Build.0 = Debug|x64
+		{F9DCD1D7-72DF-4BF7-A4E6-6574B0149FB6}.Debug|x86.ActiveCfg = Debug|Win32
+		{F9DCD1D7-72DF-4BF7-A4E6-6574B0149FB6}.Debug|x86.Build.0 = Debug|Win32
+		{F9DCD1D7-72DF-4BF7-A4E6-6574B0149FB6}.Release|x64.ActiveCfg = Release|x64
+		{F9DCD1D7-72DF-4BF7-A4E6-6574B0149FB6}.Release|x64.Build.0 = Release|x64
+		{F9DCD1D7-72DF-4BF7-A4E6-6574B0149FB6}.Release|x86.ActiveCfg = Release|Win32
+		{F9DCD1D7-72DF-4BF7-A4E6-6574B0149FB6}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
