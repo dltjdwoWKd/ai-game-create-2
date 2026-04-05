@@ -33,7 +33,7 @@
 
 /*
 ================================================================================
- [기술 세미나: std::chrono 기반 Variable Delta Time 게임 루프]
+ [std::chrono 기반 Variable Delta Time 게임 루프]
 ================================================================================
  1. std::chrono 사용 이유
     - Win32의 QPC보다 이식성이 좋고, C++ 표준이며, 타입 안정성이 뛰어남.
@@ -47,55 +47,48 @@
 */
 
 #include <iostream>
-#include <chrono> // C++ 고정밀 타이머
+#include <chrono>
 #include <thread>
 #include <windows.h>
 
-// 1. 데이터 구조 (C 스타일 유지)
+// 데이터 구조
 typedef struct {
     float x, y;
     float speed;
 } GameObject;
 
-// --- [게임 엔진의 핵심 단계별 함수] ---
+typedef struct {
+    bool isUp;
+    bool isDown;
+    bool isLeft;
+    bool isRight;
+    bool isExit;
+} InputContext;
 
-// 입력을 스냅샷 찍는 단계 (Input)
-void ProcessInput(bool* isRunning) {
-    if (GetAsyncKeyState(VK_ESCAPE) & 0x8000) *isRunning = false;
+// --- [게임 엔진 핵심 단계] ---
+
+void ProcessInput(InputContext* context) {
+    context->isUp = (GetAsyncKeyState('W') & 0x8000);
+    context->isDown = (GetAsyncKeyState('S') & 0x8000);
+    context->isLeft = (GetAsyncKeyState('A') & 0x8000);
+    context->isRight = (GetAsyncKeyState('D') & 0x8000);
+    context->isExit = (GetAsyncKeyState(VK_ESCAPE) & 0x8000);
 }
 
-// 세상을 변화시키는 단계 (Update) - DeltaTime 필수!
-void Update(GameObject* player, float dt) {
-    /* * 실전 가이드 1 & 2 적용:
-     * '초당 이동 거리'를 보장하기 위해 모든 이동 로직에 dt를 곱함.
-     */
-    if (GetAsyncKeyState('W') & 0x8000) player->y -= player->speed * dt;
-    if (GetAsyncKeyState('S') & 0x8000) player->y += player->speed * dt;
-    if (GetAsyncKeyState('A') & 0x8000) player->x -= player->speed * dt;
-    if (GetAsyncKeyState('D') & 0x8000) player->x += player->speed * dt;
-
-    /* 실전 가이드 3: 쿨타임/타이머 예시 */
-    static float messageTimer = 0.0f;
-    messageTimer += dt;
-    if (messageTimer >= 2.0f) {
-        // 2초마다 로그 출력
-        // std::cout << "2 Seconds Passed!" << std::endl;
-        messageTimer = 0.0f;
-    }
+void Update(GameObject* player, const InputContext* context, float dt) {
+    if (context->isUp)    player->y -= player->speed * dt;
+    if (context->isDown)  player->y += player->speed * dt;
+    if (context->isLeft)  player->x -= player->speed * dt;
+    if (context->isRight) player->x += player->speed * dt;
 }
 
-// 화면을 그리는 단계 (Render) - DeltaTime 없음!
 void Render(const GameObject* player, float fps) {
-    /* * 실전 가이드 5 적용:
-     * Render는 Update에서 계산된 player의 좌표를 '그리기'만 함.
-     */
     system("cls");
-    printf("=== Engine Heartbeat ===\n");
-    printf("FPS : %.2f (dt: %.4fs)\n", fps, 1.0f / fps);
-    printf("Player Position: (%.2f, %.2f)\n", player->x, player->y);
-    printf("========================\n");
+    printf("=== Explicit Type Engine ===\n");
+    printf("FPS : %.2f | DT : %.4fs\n", fps, 1.0f / fps);
+    printf("Player: (%.1f, %.1f)\n", player->x, player->y);
+    printf("============================\n");
 
-    // 좌표 시각화 (간이)
     int py = (int)(player->y / 10.0f);
     int px = (int)(player->x / 5.0f);
     for (int i = 0; i < py; i++) printf("\n");
@@ -104,29 +97,25 @@ void Render(const GameObject* player, float fps) {
 }
 
 int main() {
-    GameObject player = { 100.0f, 100.0f, 200.0f }; // 초당 200픽셀 이동 속력
-    bool isRunning = true;
+    GameObject player = { 100.0f, 100.0f, 200.0f };
+    InputContext input = { 0 };
+    
+    // high_resolution_clock 내부에 정의된 time_point 타입을 직접 명시함.
+    std::chrono::high_resolution_clock::time_point prevTime = std::chrono::high_resolution_clock::now();
 
-    // --- [타이머 초기화] ---
-    // high_resolution_clock: 시스템에서 제공하는 가장 정밀한 시계
-    auto prevTime = std::chrono::high_resolution_clock::now();
-
-    // --- [정석 Game Loop] ---
-    while (isRunning) {
+    while (!input.isExit) {
         // A. DeltaTime 계산
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        // 현재 시간과 이전 시간의 차이를 구함 (duration)
-        std::chrono::duration<float> elapsed = currentTime - prevTime;
-        float dt = elapsed.count(); // 초(sec) 단위로 변환
+        std::chrono::high_resolution_clock::time_point currentTime = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<float> elapsed = currentTime - prevTime; // 두 시점의 차이를 구함 (초 단위 float으로 캐스팅)
+        float dt = elapsed.count();
         prevTime = currentTime;
 
-        // B. 루프 3단계 실행
-        ProcessInput(&isRunning);   // 1. 입력
-        Update(&player, dt);         // 2. 로직 업데이트 (dt 사용)
-        Render(&player, 1.0f / dt);  // 3. 렌더링 (dt 미사용, FPS 표시용으로만 전달)
+        // B. 루프 실행
+        ProcessInput(&input);
+        Update(&player, &input, dt);
+        Render(&player, 1.0f / dt);
 
-        // 프레임이 너무 미쳐 날뛰지 않게 아주 약간의 휴식 (CPU 점유율 조절)
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));  // 1ms 라도 쉬어서 CPU가 버닝하는것을 막음
     }
 
     return 0;
